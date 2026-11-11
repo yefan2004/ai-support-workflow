@@ -1,0 +1,11 @@
+[project]
+name = "ai-support-workflow"
+version = "0.1.0"
+description = "演示项目：AI 辅助客服邮件分流与人工审核（FastAPI + PostgreSQL + n8n）"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"

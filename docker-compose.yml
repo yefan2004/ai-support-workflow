@@ -1,0 +1,38 @@
+# 本地演示用 Docker Compose 配置：PostgreSQL + n8n。
+# 全部为演示默认值，不包含任何真实密钥；生产环境请自行修改并启用鉴权。
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ai-support-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-demo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-demo}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_support}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-demo} -d ${POSTGRES_DB:-ai_support}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # n8n 用于本地演示工作流编排；生产部署必须自行配置鉴权与持久化策略。
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: ai-support-n8n
+    environment:
+      N8N_PORT: "5678"
+      GENERIC_TIMEZONE: Asia/Shanghai
+      # 本地演示默认不开启登录鉴权；生产环境务必设置强密码并开启鉴权。
+      N8N_BASIC_AUTH_ACTIVE: "false"
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  pgdata:
+  n8n_data:
