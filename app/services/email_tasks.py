@@ -6,7 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.models import EmailTask, EmailTaskStatus
+from app.core.email_status import EmailTaskStatus
+from app.db.models import EmailTask
 from app.schemas.emails import EmailTaskCreate
 
 

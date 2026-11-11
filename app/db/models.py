@@ -1,21 +1,12 @@
 """SQLAlchemy ORM 模型。"""
 
-import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, String, Text, UniqueConstraint, func, true
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.email_status import EmailTaskStatus
 from app.db.base import Base
-
-
-class EmailTaskStatus(str, enum.Enum):
-    """邮件任务状态。
-
-    本阶段仅使用 received；其余状态为后续阶段（分流/审核/发送）预留。
-    """
-
-    RECEIVED = "received"
 
 
 class EmailTask(Base):
@@ -56,3 +47,28 @@ class EmailTask(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+    # --- 分流结果（后续阶段写入，本阶段仅建字段）---
+    category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    risk_level: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    risk_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requires_human: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=true(),
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # --- 人工审核（后续阶段写入，本阶段仅建字段）---
+    review_action: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    review_comment: Mapped[str | None] = mapped_column(Text, nullable=True)

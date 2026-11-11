@@ -1,8 +1,9 @@
 """pytest 共享 fixture。
 
-数据库测试使用真实 PostgreSQL（默认复用 DATABASE_URL，可用
-TEST_DATABASE_URL 覆盖）。若数据库不可用，相关测试会跳过并注明原因；
-数据库可用但未执行迁移时，测试会直接失败并提示先运行迁移。
+数据库测试使用真实 PostgreSQL（优先 TEST_DATABASE_URL）。
+清理 fixture 带有安全保护：只有当前数据库名为 ai_support_test 时才允许
+TRUNCATE，防止误清空开发/演示数据库。数据库不可用时相关测试会跳过；
+数据库可用但未执行迁移时，测试会失败并提示先运行迁移。
 """
 
 import os
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.config import get_settings
 from app.db.session import get_db
 from app.main import app
+from tests.db_safety import DatabaseSafetyError, ensure_test_database
 
 
 def _database_url() -> str:
@@ -49,10 +51,21 @@ def db_engine() -> Generator[Engine, None, None]:
 
 @pytest.fixture()
 def clean_db(db_engine: Engine) -> Generator[None, None, None]:
-    """每个用例前后清空 email_tasks，保证互不干扰。"""
+    """每个用例前后清空 email_tasks，保证互不干扰。
+
+    安全保护：TRUNCATE 之前读取 current_database()，不是 ai_support_test
+    就立即终止会话，绝不执行清理。
+    """
 
     def truncate() -> None:
         with db_engine.begin() as connection:
+            database_name = connection.execute(
+                text("SELECT current_database()")
+            ).scalar_one()
+            try:
+                ensure_test_database(str(database_name))
+            except DatabaseSafetyError as exc:
+                pytest.exit(str(exc), returncode=1)
             connection.execute(text("TRUNCATE TABLE email_tasks RESTART IDENTITY"))
 
     truncate()
