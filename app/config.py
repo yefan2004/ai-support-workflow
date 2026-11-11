@@ -22,8 +22,11 @@ class Settings(BaseSettings):
     app_env: str = "local"
     app_version: str = "0.1.0"
 
-    # 本地 docker-compose 中 PostgreSQL 的默认连接串（仅演示，无真实密钥）
-    database_url: str = "postgresql://demo:demo@localhost:5432/ai_support"
+    # 本地 docker-compose 中 PostgreSQL 的默认连接串（仅演示，无真实密钥）。
+    # 使用 psycopg 3 驱动；真实部署请通过环境变量 DATABASE_URL 覆盖。
+    database_url: str = (
+        "postgresql+psycopg://demo:demo@localhost:5432/ai_support"
+    )
 
 
 @lru_cache

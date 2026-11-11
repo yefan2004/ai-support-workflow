@@ -1,4 +1,5 @@
 """路由模块。
 
-当前仅包含 health；后续阶段将增加 emails、reviews、webhooks（n8n 回调）等路由。
+当前包含 health 与 emails；
+后续阶段将增加 reviews、webhooks（n8n 回调）等路由。
 """

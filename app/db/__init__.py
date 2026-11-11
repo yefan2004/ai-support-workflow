@@ -1,5 +1,5 @@
-"""数据库层占位。
+"""数据库层。
 
-后续阶段实现：SQLAlchemy 引擎/会话、Alembic 迁移，
-以及 emails、tickets、review_records、send_records、error_logs 等模型。
+包含 SQLAlchemy 声明式基类、引擎/会话与 ORM 模型；
+表结构变更通过 Alembic 迁移管理（见项目根目录 alembic/）。
 """

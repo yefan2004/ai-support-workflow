@@ -1,12 +1,13 @@
 """FastAPI 应用入口。
 
 演示项目：AI 辅助客服邮件分流与人工审核。
-本阶段仅提供健康检查接口，业务模块为后续阶段的占位。
+本阶段提供健康检查与邮件任务登记（含数据库去重）接口；
+AI 分流、审核与发送等模块仍为后续阶段占位。
 """
 
 from fastapi import FastAPI
 
-from app.api.routes import health
+from app.api.routes import emails, health
 from app.config import get_settings
 
 settings = get_settings()
@@ -22,6 +23,7 @@ app = FastAPI(
 )
 
 app.include_router(health.router)
+app.include_router(emails.router)
 
 
 @app.get("/", tags=["meta"])
