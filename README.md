@@ -4,16 +4,16 @@
 >
 > **本项目仅用于学习与技术演示，不可直接用于生产环境。**
 >
-> - 不包含真实 AI 模型调用（AI 分流为后续阶段，且仅做模拟）
+> - 不包含真实 AI 模型调用（仅使用离线、确定性的 Mock Provider）
 > - 不接入真实邮箱（Gmail / Outlook）与 Slack
 > - 不包含任何真实密钥，所有默认账号口令仅用于本地演示
 > - 未实现鉴权、审计、限流、数据加密与合规能力
-> - 当前仅实现邮件任务登记、数据库去重、分流/审核字段与状态定义，其余流程尚未实现
+> - 当前已实现邮件任务登记、数据库去重、分流/审核字段与状态定义、风险规则与 Mock AI 分类；其余流程尚未实现
 
 基于 **FastAPI + PostgreSQL + n8n** 的 AI 辅助客服邮件分流与人工审核流程骨架。业务流程参考 `架构图/` 下的四张流程图：
 
 1. 邮件接入与去重（已实现登记与去重，未接入真实邮箱）
-2. 规则检查与 AI 分流（仅预留字段与状态，未实现服务）
+2. 规则检查与 Mock AI 分流（已实现规则服务与 Mock Provider；未接入真实 AI、未提供 API）
 3. 人工审核与回复发送（仅预留字段与状态，未实现 API 与发送）
 4. 异常处理与人工提醒（未实现）
 
@@ -36,7 +36,7 @@
 - [x] PostgreSQL 集成测试（含真实 8 线程并发）
 - [x] CI 增加 PostgreSQL 服务与迁移步骤
 
-### 阶段 3（本阶段已完成）：数据库字段 + 状态定义 + 迁移验证
+### 阶段 3（已完成）：数据库字段 + 状态定义 + 迁移验证
 
 - [x] `email_tasks` 新增 12 个字段（分流结果、人工审核、异常信息）
 - [x] `requires_human` 在 ORM 与数据库层默认 `true`，历史记录升级后自动回填
@@ -46,7 +46,17 @@
 - [x] schema 测试（新字段、默认值、唯一约束）
 - [x] 仅在独立测试库 `ai_support_test` 完成迁移与测试验证
 
-**本阶段明确不包含**：规则服务、Mock AI、process/review API、真实 AI、n8n 工作流、邮件发送、Slack、鉴权。
+### 阶段 4（本阶段已完成）：风险规则服务 + Mock AI Provider
+
+- [x] `app/services/rules.py`：纯规则判断，不访问数据库、不修改状态、不调用 AI
+- [x] 规则结果使用 `requires_immediate_handoff`；未命中时 `risk_level` / `suggested_category` 为 `None`
+- [x] 共享类型 `app/core/triage_types.py`（类别与风险等级），规则与 Provider 共用
+- [x] `AIProvider` 抽象接口 + Pydantic `ClassificationResult` schema
+- [x] `MockAIProvider`：离线、确定性、关键词分类，`requires_human=true`，不生成不实草稿
+- [x] 57 个新增单元测试（不依赖数据库）
+- [x] 全量测试 130 passed
+
+**当前阶段明确不包含**：process API、review API、真实 AI、n8n 工作流、邮件发送、Slack、真实通知、鉴权。
 
 ## 技术栈
 
@@ -56,7 +66,8 @@
 | PostgreSQL 16 | 业务数据存储 | 已接入（`email_tasks` 表） |
 | SQLAlchemy 2.0 + Alembic | ORM 与数据库迁移 | 已启用 |
 | psycopg 3 | PostgreSQL 驱动 | 已启用 |
-| pytest / httpx | 自动化测试 | 73 个测试 |
+| 规则 + Mock AI | 风险规则与离线分类 | 已启用（仅 Mock，无真实 AI） |
+| pytest / httpx | 自动化测试 | 130 个测试 |
 | n8n | 邮件接入与流程编排 | Docker Compose 已配置，工作流待实现 |
 
 ## 目录结构
@@ -70,13 +81,20 @@ ai-support-workflow/
 │   │   ├── health.py               # GET /health
 │   │   └── emails.py               # POST /api/v1/emails
 │   ├── core/
-│   │   └── email_status.py         # 状态枚举与转换校验
+│   │   ├── email_status.py         # 任务状态与转换校验
+│   │   └── triage_types.py         # 分类/风险共享类型
 │   ├── db/
 │   │   ├── base.py                 # SQLAlchemy DeclarativeBase
 │   │   ├── models.py               # email_tasks 模型（含分流/审核字段）
 │   │   └── session.py              # 引擎、Session、get_db 依赖
+│   ├── providers/
+│   │   └── ai/
+│   │       ├── base.py             # AIProvider 接口与 ClassificationResult
+│   │       └── mock_provider.py    # 离线确定性 Mock Provider
 │   ├── schemas/emails.py           # 请求/响应 Pydantic 模型
-│   └── services/email_tasks.py     # 登记与数据库去重服务
+│   └── services/
+│       ├── email_tasks.py          # 登记与数据库去重服务
+│       └── rules.py                # 高风险规则服务（纯函数）
 ├── alembic/
 │   ├── env.py                      # 从 DATABASE_URL 读取连接
 │   └── versions/
@@ -89,7 +107,9 @@ ai-support-workflow/
 │   ├── test_email_schema.py        # 字段/默认值/唯一约束测试
 │   ├── test_email_status.py        # 状态转换测试
 │   ├── test_emails.py              # 邮件登记/去重测试
-│   └── test_health.py
+│   ├── test_health.py
+│   ├── test_mock_ai_provider.py    # Mock Provider/schema/异常测试
+│   └── test_rules.py               # 规则服务测试
 ├── n8n/                            # 后续：n8n 工作流 JSON 占位
 ├── 架构图/                          # 业务流程图（01-04，未改动）
 ├── .github/workflows/ci.yml        # CI（含 PostgreSQL 测试库）
@@ -199,6 +219,14 @@ env -u PYTHONPATH .venv/bin/python -m pytest -v
 - `ai_support` 未被修改：迁移版本与行数在验证前后均为 `0001_create_email_tasks` / 1 行，非敏感摘要一致
 - 说明：GitHub Actions 未在本地实际触发；未进行多实例部署与压力测试
 
+### 本地验证结果（2026-11-11，阶段 4）
+
+- 新增单元测试：`pytest tests/test_rules.py tests/test_mock_ai_provider.py -v` → **57 passed**（0.06s）
+- 将 `DATABASE_URL` / `TEST_DATABASE_URL` 指向不可达地址后重跑新增测试 → **57 passed**（证明不依赖数据库）
+- 全量测试（测试库 `ai_support_test`）→ **130 passed, 1 warning**（1.19s）
+- `ai_support` 未被修改：迁移版本 `0001_create_email_tasks`、1 行数据、非敏感摘要与验证前一致
+- GitHub Actions 未实际触发；本阶段未接入真实 AI
+
 ## 配置说明
 
 配置通过环境变量或 `.env` 读取（见 `app/config.py` 与 `.env.example`），默认值全部为本地演示配置：
@@ -240,25 +268,64 @@ awaiting_review → approved | rejected | human_takeover
 - 本阶段未定义 `sent` / `sending`，也未实现发送功能。
 - 状态仅在 Python 层校验，直接写库可绕过（见已知限制）。
 
+## 风险规则与 Mock AI（阶段 4）
+
+### 规则服务（`app/services/rules.py`）
+
+纯函数 `evaluate_rules(subject, body)`：不访问数据库、不修改任务状态、不调用 AI、不产生自动发送指令。
+
+返回字段：`matched`、`risk_level`（未命中为 `None`）、`risk_reason`、`suggested_category`（未命中为 `None`）、`requires_immediate_handoff`、`matched_keywords`。
+
+| 规则 | 风险等级 | 建议类别 | 立即转人工 |
+| --- | --- | --- | --- |
+| 法律/投诉/赔偿关键词 | high | complaint | 是 |
+| 退款/拒付关键词 | high | refund_request | 是 |
+| 修改订单 | medium | order_inquiry | 是 |
+| 修改付款/账户权限 | medium | other | 是 |
+| 正文为空/仅空白 | medium | other | 是 |
+| 未命中 | None（未判断） | None | 否 |
+
+- 优先级：法律/投诉/赔偿 > 退款/拒付 > 订单修改 > 付款/账户权限修改。
+- 未命中规则不代表邮件安全，后续草稿仍必须人工审核。
+- 空正文规则直接要求人工处理，不进入 AI 分类（当前尚无编排 API，调用顺序在后续阶段实现）。
+
+### Mock AI Provider（`app/providers/ai/mock_provider.py`）
+
+- 完全离线：不访问网络、不读取 API Key、不访问数据库、不发送邮件。
+- 确定性关键词分类，优先级：投诉/法律 > 退款/拒付 > 订单/物流 > 产品/功能 > 其他。
+- `requires_human` 始终为 `true`。
+- `product_question`、`order_inquiry` 可生成通用草稿；`refund_request`、`complaint`、`other` 不生成草稿。
+- 草稿不包含订单号、发货、付款、退款、账户状态等事实；所有草稿仍需人工审核。
+- `ClassificationResult` 使用 Pydantic 校验：非法 category/risk_level、缺少字段、额外字段都会被拒绝。
+- 测试中通过 fake provider 注入异常、超时和可重试异常，未引入网络调用。
+
+### 已知局限（规则/Mock）
+
+- 精确关键词规则可能漏判（同义词、拼写错误、其他语言）或误判。
+- 例如 `illegal` 不会匹配 `legal`，但这**不代表**邮件安全。
+- Prompt 注入相关测试只验证 Mock 的行为，不能证明真实 LLM 已被防护。
+- 本阶段没有 API 编排、数据库写入或人工审核流程；未接入真实 AI。
+
 ## 后续待实现模块
 
 已完成：
 
 - 邮件任务登记与数据库去重（`email_tasks`、`POST /api/v1/emails`）
-- 分流/审核字段与状态定义（本阶段仅字段、状态与校验，无业务服务）
+- 分流/审核字段与状态定义（字段、状态与校验）
+- 风险规则服务与 Mock AI Provider（离线，无 API 集成）
 
 待实现：
 
-1. **规则检查服务**（图 2）：高风险规则（退款、投诉、隐私等）
-2. **Mock AI 分流**：模拟分类、摘要、风险等级、置信度、建议回复与输出校验
-3. **process API**：驱动 `received → processing → awaiting_review / failed`
-4. **review API**：批准 / 修改后批准 / 拒绝 / 人工接管
-5. **异常处理与提醒**（图 4）：安全重试、`failed` 状态、超时提醒（模拟通知）
-6. **发送功能**：发送前检查与结果记录（模拟）；届时再定义 `sent` / `sending` 等状态
-7. **n8n 工作流**：`n8n/` 下工作流 JSON 导出与导入说明
-8. **可观测性与就绪探针**：`/ready`、结构化日志、请求 ID、统一异常处理
-9. **数据层扩展**：tickets、review_records、send_records、error_logs 等表与迁移
-10. **安全加固**：鉴权、审计日志、限流、敏感数据脱敏
+1. **分流编排（triage）**：按“规则要求立即转人工 → 否则 Mock AI”顺序编排（图 2）
+2. **process API**：驱动 `received → processing → awaiting_review / failed`，并写回分流结果
+3. **review API**：批准 / 修改后批准 / 拒绝 / 人工接管
+4. **异常处理与提醒**（图 4）：安全重试、`failed` 状态、超时提醒（模拟通知）
+5. **发送功能**：发送前检查与结果记录（模拟）；届时再定义 `sent` / `sending` 等状态
+6. **n8n 工作流**：`n8n/` 下工作流 JSON 导出与导入说明
+7. **可观测性与就绪探针**：`/ready`、结构化日志、请求 ID、统一异常处理
+8. **数据层扩展**：tickets、review_records、send_records、error_logs 等表与迁移
+9. **安全加固**：鉴权、审计日志、限流、敏感数据脱敏
+10. **真实 AI 接入（未来）**：需单独评估提示注入防护、密钥管理、审计与数据合规，不在当前演示范围
 
 ## 已知限制与风险（演示阶段）
 
@@ -270,3 +337,8 @@ awaiting_review → approved | rejected | human_takeover
 - 并发验证为单进程多线程 + 单 PostgreSQL 实例，未做多实例部署与压力测试
 - 未实现 `/ready`、结构化日志、监控与告警
 - CI 配置未在 GitHub 上实际运行验证
+- 规则/Mock 使用精确关键词，可能漏判（同义词、拼写错误、其他语言）或误判
+- 例如 `illegal` 不匹配 `legal`，但这不代表邮件安全
+- Prompt 注入相关测试只验证 Mock 行为，不能证明真实 LLM 已被防护
+- 规则与 Mock 尚未接入 API/数据库/审核流程；Mock 的 `requires_human` 始终为 `true`，草稿必须人工审核
+- 未接入真实 AI、网络、邮箱、Slack 或通知
