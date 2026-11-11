@@ -7,7 +7,7 @@ TRUNCATE，防止误清空开发/演示数据库。数据库不可用时相关�
 """
 
 import os
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,14 +16,27 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.api.deps import get_ai_provider
 from app.config import get_settings
 from app.db.session import get_db
 from app.main import app
+from app.providers.ai.base import AIProvider
 from tests.db_safety import DatabaseSafetyError, ensure_test_database
 
 
 def _database_url() -> str:
     return os.getenv("TEST_DATABASE_URL") or get_settings().database_url
+
+
+def _ensure_test_database_or_exit(connection) -> None:
+    """在任何数据库查询/写入前确认库名为 ai_support_test。"""
+    database_name = connection.execute(
+        text("SELECT current_database()")
+    ).scalar_one()
+    try:
+        ensure_test_database(str(database_name))
+    except DatabaseSafetyError as exc:
+        pytest.exit(str(exc), returncode=1)
 
 
 @pytest.fixture(scope="session")
@@ -33,6 +46,7 @@ def db_engine() -> Generator[Engine, None, None]:
 
     try:
         with engine.connect() as connection:
+            _ensure_test_database_or_exit(connection)
             connection.execute(text("SELECT 1"))
             email_tasks_table = connection.execute(
                 text("SELECT to_regclass('public.email_tasks')")
@@ -59,18 +73,23 @@ def clean_db(db_engine: Engine) -> Generator[None, None, None]:
 
     def truncate() -> None:
         with db_engine.begin() as connection:
-            database_name = connection.execute(
-                text("SELECT current_database()")
-            ).scalar_one()
-            try:
-                ensure_test_database(str(database_name))
-            except DatabaseSafetyError as exc:
-                pytest.exit(str(exc), returncode=1)
+            _ensure_test_database_or_exit(connection)
             connection.execute(text("TRUNCATE TABLE email_tasks RESTART IDENTITY"))
 
     truncate()
     yield
     truncate()
+
+
+@pytest.fixture()
+def override_ai_provider() -> Generator[Callable[[AIProvider], None], None, None]:
+    """在测试中覆盖 get_ai_provider 依赖。"""
+
+    def _override(provider: AIProvider) -> None:
+        app.dependency_overrides[get_ai_provider] = lambda: provider
+
+    yield _override
+    app.dependency_overrides.pop(get_ai_provider, None)
 
 
 @pytest.fixture()

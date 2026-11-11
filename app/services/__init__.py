@@ -3,10 +3,10 @@
 已实现：
 - email_tasks：邮件任务登记与数据库去重
 - rules：高风险规则检查（纯函数，不访问数据库）
+- triage：process 编排（规则 → Mock AI → 状态落库）
+- review：人工审核状态更新
 
 后续阶段实现：
-- triage：编排规则检查与 Mock AI（本阶段仅提供 Provider 与规则）
-- review：人工审核状态流转
 - send：发送前检查与发送结果记录（模拟）
 - alerts：异常处理与人工提醒（模拟）
 """
