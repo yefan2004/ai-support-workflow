@@ -1,0 +1,6 @@
+{
+  "mailbox_id": "test@example.com",
+  "message_id": "<stage6-refund-request-001@example.com>",
+  "subject": "退款申请",
+  "body": "这是一封合成测试邮件：客户要求退款，请协助处理。"
+}

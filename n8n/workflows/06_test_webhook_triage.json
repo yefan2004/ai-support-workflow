@@ -1,0 +1,298 @@
+{
+  "name": "06 - Test Webhook Triage (Draft)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test-webhook-triage",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.body ?? {}; return [{ json: { register_body: { mailbox_id: input.mailbox_id ?? '', message_id: input.message_id ?? '', subject: input.subject ?? '', body: input.body ?? '' } } }];"
+      },
+      "id": "22222222-2222-4222-8222-222222222222",
+      "name": "Build Register Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.FASTAPI_BASE_URL }}/api/v1/emails",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.register_body) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "33333333-3333-4333-8333-333333333333",
+      "name": "Register Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const KNOWN = new Set(['received','processing','awaiting_review','approved','rejected','human_takeover','failed']); const raw = $json ?? {}; const hasStatusCode = raw.statusCode !== undefined && raw.statusCode !== null; const httpStatus = hasStatusCode ? Number(raw.statusCode) : null; const body = raw.body !== undefined ? raw.body : raw; const taskId = body && body.id !== undefined && body.id !== null ? body.id : null; const duplicate = Boolean(body && body.duplicate === true); const taskStatus = body && typeof body.status === 'string' ? body.status : null; function fail(code, message, nextAction, detail, workflowStatus) { const error = { code, message }; if (detail !== undefined) error.detail = detail; return [{ json: { branch: 'stop', http_status: workflowStatus ?? 502, response: { ok: false, stage: 'register', task_id: taskId, duplicate, api_status: httpStatus, result: null, error, next_action: nextAction } } }]; } if (!hasStatusCode) { return fail('NETWORK_ERROR', 'Network error while calling the registration API', 'manual_inspection', raw.error ?? null, 502); } if (httpStatus === 422) { return fail('VALIDATION_ERROR', 'The registration request was rejected by FastAPI validation', 'correct_input', body, 422); } if (httpStatus === 500) { return fail('REGISTER_FAILED', 'The registration API returned an unexpected error; task creation is unknown', 'manual_inspection', body, 500); } if (httpStatus === 503) { return fail('REGISTER_UNAVAILABLE', 'The registration API is unavailable; task creation is unknown', 'manual_inspection', body, 503); } if (httpStatus !== 200 && httpStatus !== 201) { return fail('REGISTER_HTTP_ERROR', 'Unexpected registration HTTP status', 'manual_inspection', body, httpStatus); } if (!body || taskId === null || taskStatus === null) { return fail('INVALID_REGISTER_RESPONSE', 'The registration response is missing id or status', 'manual_inspection', body, 502); } if (!KNOWN.has(taskStatus)) { return fail('UNKNOWN_TASK_STATUS', 'The registration response contains an unknown task status', 'manual_inspection', body, 200); } const branch = taskStatus === 'received' ? 'process' : 'query'; return [{ json: { branch, task_id: taskId, duplicate, register_status: taskStatus, register_http_status: httpStatus, register_body: body } }];"
+      },
+      "id": "44444444-4444-4444-8444-444444444444",
+      "name": "Normalize Register",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.branch }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "process",
+              "output": 0
+            },
+            {
+              "value2": "query",
+              "output": 1
+            },
+            {
+              "value2": "stop",
+              "output": 2
+            }
+          ]
+        }
+      },
+      "id": "55555555-5555-4555-8555-555555555555",
+      "name": "Branch by Register Status",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.FASTAPI_BASE_URL }}/api/v1/emails/{{ $json.task_id }}/process",
+        "sendBody": false,
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "66666666-6666-4666-8666-666666666666",
+      "name": "Process Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -100
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.FASTAPI_BASE_URL }}/api/v1/emails/{{ $json.task_id }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "77777777-7777-4777-8777-777777777777",
+      "name": "Get Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const KNOWN = new Set(['received','processing','awaiting_review','approved','rejected','human_takeover','failed']); const reg = $('Normalize Register').item.json; const stage = reg.branch === 'process' ? 'process' : 'query'; const raw = $json ?? {}; const hasStatusCode = raw.statusCode !== undefined && raw.statusCode !== null; const httpStatus = hasStatusCode ? Number(raw.statusCode) : null; const body = raw.body !== undefined ? raw.body : raw; const taskId = reg.task_id; const duplicate = reg.duplicate; function nextAction(status) { const map = { awaiting_review: 'human_review', human_takeover: 'human_takeover', approved: 'approved_not_sent', rejected: 'rejected', processing: 'processing', failed: 'failed' }; return map[status] ?? 'manual_inspection'; } function fail(code, message, nextActionValue, detail, workflowStatus, extra) { const error = { code, message }; if (detail !== undefined) error.detail = detail; if (extra) Object.assign(error, extra); return [{ json: { http_status: workflowStatus ?? 502, response: { ok: false, stage, task_id: taskId, duplicate, api_status: httpStatus, result: null, error, next_action: nextActionValue } } }]; } function success(result) { return [{ json: { http_status: 200, response: { ok: true, stage, task_id: taskId, duplicate, api_status: 200, result, error: null, next_action: nextAction(result.status) } } }]; } if (!hasStatusCode) { return fail('NETWORK_ERROR', 'Network error while calling the ' + stage + ' API', 'manual_query_via_get', raw.error ?? null, 502); } if (httpStatus === 200) { if (!body || typeof body !== 'object' || typeof body.status !== 'string') { return fail('INVALID_' + stage.toUpperCase() + '_RESPONSE', 'The ' + stage + ' response is missing status', 'manual_inspection', body, 502); } if (!KNOWN.has(body.status)) { return fail('UNKNOWN_TASK_STATUS', 'The ' + stage + ' response contains an unknown task status', 'manual_inspection', body, 502); } return success(body); } if (stage === 'process') { if (httpStatus === 404) { return fail('TASK_NOT_FOUND', 'The task was not found during process', 'manual_inspection', body && body.detail !== undefined ? body.detail : body, 404); } if (httpStatus === 409) { return fail('PROCESSING_CONFLICT', 'The task state conflicts with process; do not retry automatically', 'manual_query_via_get', body && body.detail !== undefined ? body.detail : body, 409); } if (httpStatus === 502) { const detail = body && body.detail !== undefined ? body.detail : body; const extra = body && body.task !== undefined ? { task: body.task } : undefined; return fail('PROVIDER_FAILURE', 'The AI provider failed or returned invalid output; the task is marked failed', 'manual_inspection', detail, 502, extra); } if (httpStatus === 503) { return fail('DATABASE_OR_SERVICE_UNAVAILABLE', 'The database or service is unavailable; task state is uncertain', 'manual_query_via_get', body && body.detail !== undefined ? body.detail : body, 503); } if (httpStatus === 500) { return fail('UNEXPECTED_PROCESSING_ERROR', 'Unexpected processing error; the task may remain processing', 'manual_query_via_get', body && body.detail !== undefined ? body.detail : body, 500); } return fail('PROCESS_HTTP_ERROR', 'Unexpected processing HTTP status', 'manual_inspection', body, httpStatus); } if (httpStatus === 404) { return fail('TASK_NOT_FOUND', 'The task was not found during query', 'manual_inspection', body && body.detail !== undefined ? body.detail : body, 404); } if (httpStatus === 503) { return fail('QUERY_UNAVAILABLE', 'The task query is unavailable', 'manual_query_via_get', body && body.detail !== undefined ? body.detail : body, 503); } return fail('QUERY_HTTP_ERROR', 'Unexpected query HTTP status', 'manual_inspection', body, httpStatus);"
+      },
+      "id": "88888888-8888-4888-8888-888888888888",
+      "name": "Normalize Process or Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.response) }}",
+        "options": {
+          "responseCode": "={{ $json.http_status }}"
+        }
+      },
+      "id": "99999999-9999-4999-8999-999999999999",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build Register Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Register Body": {
+      "main": [
+        [
+          {
+            "node": "Register Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Email": {
+      "main": [
+        [
+          {
+            "node": "Normalize Register",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Register": {
+      "main": [
+        [
+          {
+            "node": "Branch by Register Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Branch by Register Status": {
+      "main": [
+        [
+          {
+            "node": "Process Task",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Task",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Task": {
+      "main": [
+        [
+          {
+            "node": "Normalize Process or Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Task": {
+      "main": [
+        [
+          {
+            "node": "Normalize Process or Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Process or Query": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "pinData": {},
+  "tags": []
+}

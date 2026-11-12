@@ -1,0 +1,6 @@
+{
+  "mailbox_id": "test@example.com",
+  "message_id": "<stage6-normal-product-001@example.com>",
+  "subject": "产品功能咨询",
+  "body": "这是一封合成测试邮件：请问产品有哪些功能？价格如何？"
+}
