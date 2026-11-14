@@ -1,4 +1,4 @@
-"""邮件任务处理编排：规则检查 → Mock AI → 结果持久化。
+"""邮件任务处理编排：规则检查 → AI Provider → 结果持久化。
 
 处理流程只通过条件 UPDATE 认领和写回状态：
 - 认领：WHERE status='received'；
@@ -18,7 +18,12 @@ from sqlalchemy.orm import Session
 from app.core.email_status import EmailTaskStatus
 from app.core.triage_types import AllowedCategory, RiskLevel
 from app.db.models import EmailTask
-from app.providers.ai.base import AIProvider, AIProviderError, ClassificationResult
+from app.providers.ai.base import (
+    AIProvider,
+    AIProviderError,
+    AIProviderErrorCategory,
+    ClassificationResult,
+)
 from app.services.db_utils import reload_task, safe_current_status
 from app.services.errors import (
     DatabaseOperationError,
@@ -151,6 +156,12 @@ def _finalize(
 
 def _failure_reason(prefix: str, exc: BaseException) -> str:
     """只记录安全的错误类别，不保存正文、密钥或堆栈。"""
+    if isinstance(exc, AIProviderError):
+        category = exc.category
+        if isinstance(category, AIProviderErrorCategory):
+            return (
+                f"{prefix}：{type(exc).__name__}（{category.value}）"
+            )[:500]
     return f"{prefix}：{type(exc).__name__}"[:500]
 
 
@@ -206,7 +217,7 @@ def _failed_values(reason: str) -> dict[str, object]:
 def process_email_task(
     db: Session, task_id: int, provider: AIProvider
 ) -> ProcessOutcome:
-    """执行规则检查与 Mock AI 分流，并持久化最终状态。"""
+    """执行规则检查与 AI Provider 分流，并持久化最终状态。"""
     task, existing = _claim_task(db, task_id)
     if existing is not None:
         return ProcessOutcome(task=existing, reused_existing=True)

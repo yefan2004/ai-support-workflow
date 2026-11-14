@@ -1,9 +1,10 @@
 """AI Provider 抽象接口与分类结果 schema。
 
 本模块不访问网络、数据库或密钥；具体 Provider 由调用方注入。
-分类结果仅用于演示，不代表真实模型能力。
+分类结果必须经过人工审核，不能直接用于自动发送。
 """
 
+import enum
 from abc import ABC, abstractmethod
 
 from pydantic import BaseModel, ConfigDict
@@ -11,8 +12,26 @@ from pydantic import BaseModel, ConfigDict
 from app.core.triage_types import AllowedCategory, RiskLevel
 
 
+class AIProviderErrorCategory(str, enum.Enum):
+    """可安全写入任务 failure_reason 的固定 Provider 错误类别。"""
+
+    RESPONSE_STRUCTURE = "response_structure"
+    EMPTY_CONTENT = "empty_content"
+    INVALID_JSON = "invalid_json"
+    SCHEMA_VALIDATION = "schema_validation"
+
+
 class AIProviderError(RuntimeError):
     """AI Provider 基础异常。"""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        category: AIProviderErrorCategory | None = None,
+    ) -> None:
+        self.category = category
+        super().__init__(message)
 
 
 class AIProviderTimeoutError(AIProviderError):

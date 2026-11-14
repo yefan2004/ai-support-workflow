@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>人工审核 · AI Support Workflow</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC",
+        sans-serif;
+      color: #1f2937;
+      background: #f4f6fa;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #f4f6fa; }
+    main { max-width: 920px; margin: 0 auto; padding: 32px 20px 48px; }
+    header h1 { margin: 0 0 8px; font-size: 28px; }
+    header p { margin: 0; color: #5b6575; line-height: 1.6; }
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 18px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+    }
+    .card h2 { margin: 0 0 14px; font-size: 19px; }
+    .card h3 { margin: 20px 0 8px; font-size: 16px; }
+    .row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+    label { display: block; margin: 0 0 6px; font-weight: 600; font-size: 14px; }
+    input, textarea {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font: inherit;
+      color: inherit;
+      background: #fff;
+    }
+    input:focus, textarea:focus {
+      outline: 3px solid #bfdbfe;
+      border-color: #2563eb;
+    }
+    #task-id { max-width: 240px; }
+    textarea { resize: vertical; min-height: 76px; }
+    button {
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font: inherit;
+      font-weight: 600;
+      color: #1f2937;
+      background: #fff;
+      cursor: pointer;
+    }
+    button:hover:not(:disabled) { background: #f8fafc; }
+    button:disabled { cursor: not-allowed; opacity: 0.45; }
+    #load-button { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+    #load-button:hover:not(:disabled) { background: #1e40af; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .actions button[data-action="approve"] {
+      background: #15803d; border-color: #15803d; color: #fff;
+    }
+    .actions button[data-action="reject"] {
+      background: #b91c1c; border-color: #b91c1c; color: #fff;
+    }
+    .actions button[data-action="takeover"] {
+      background: #475569; border-color: #475569; color: #fff;
+    }
+    .actions button[data-action]:hover:not(:disabled) { filter: brightness(0.94); }
+    .field { margin-top: 14px; }
+    .details { display: grid; gap: 12px; margin: 0; }
+    .details > div {
+      display: grid;
+      grid-template-columns: 130px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+    dt { color: #64748b; font-size: 14px; font-weight: 600; }
+    dd { margin: 0; min-width: 0; line-height: 1.6; overflow-wrap: anywhere; }
+    .pre-wrap { white-space: pre-wrap; }
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .badge[data-status="awaiting_review"] { background: #fef3c7; color: #92400e; }
+    .badge[data-status="approved"] { background: #dcfce7; color: #166534; }
+    .badge[data-status="rejected"] { background: #fee2e2; color: #991b1b; }
+    .badge[data-status="human_takeover"] { background: #e2e8f0; color: #334155; }
+    .badge[data-status="failed"] { background: #fee2e2; color: #991b1b; }
+    .badge[data-status="processing"] { background: #dbeafe; color: #1e40af; }
+    .notice {
+      margin: 8px 0;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #eff6ff;
+      color: #1e3a5f;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .notice.warning { background: #fff7ed; color: #7c2d12; }
+    .hint { margin: 10px 0 0; color: #64748b; font-size: 14px; line-height: 1.6; }
+    .flash {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      line-height: 1.6;
+    }
+    .flash.info { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+    .flash.success { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+    .flash.error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    footer { margin-top: 24px; color: #64748b; font-size: 13px; }
+    [hidden] { display: none !important; }
+    @media (max-width: 560px) {
+      .details > div { grid-template-columns: 1fr; gap: 3px; }
+      #task-id { max-width: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>人工审核</h1>
+      <p>输入 task_id 查看任务分类、风险、摘要和草稿，并执行人工审核。</p>
+    </header>
+
+    <section class="card" aria-labelledby="lookup-heading">
+      <h2 id="lookup-heading">查询任务</h2>
+      <form id="task-form" class="row">
+        <div>
+          <label for="task-id">task_id</label>
+          <input id="task-id" name="task_id" type="number" min="1" step="1"
+            required autocomplete="off" placeholder="例如 123">
+        </div>
+        <button id="load-button" type="submit">查询</button>
+      </form>
+    </section>
+
+    <div id="flash" class="flash" role="status" aria-live="polite" hidden></div>
+
+    <section id="task-panel" class="card" aria-labelledby="task-heading" hidden>
+      <h2 id="task-heading">任务 #<span id="task-id-value"></span></h2>
+      <dl class="details">
+        <div><dt>状态</dt><dd><span id="task-status" class="badge"></span></dd></div>
+        <div><dt>分类</dt><dd id="task-category"></dd></div>
+        <div><dt>风险等级</dt><dd id="task-risk-level"></dd></div>
+        <div><dt>摘要</dt><dd id="task-summary"></dd></div>
+        <div><dt>草稿</dt><dd id="task-draft" class="pre-wrap"></dd></div>
+        <div><dt>失败原因</dt><dd id="task-failure" class="pre-wrap"></dd></div>
+        <div><dt>需要人工审核</dt><dd id="task-requires-human"></dd></div>
+      </dl>
+
+      <h3>审核操作</h3>
+      <p class="notice">reviewed_by 为自报演示身份，不代表真实身份或登录。</p>
+      <p class="notice warning">审核通过（approved）仅表示人工审核通过，不代表邮件已发送。</p>
+
+      <div class="field">
+        <label for="reviewed-by">reviewed_by</label>
+        <input id="reviewed-by" type="text" maxlength="255" required
+          autocomplete="off" placeholder="例如 local-reviewer">
+      </div>
+      <div class="field">
+        <label for="review-comment">审核备注（可选）</label>
+        <textarea id="review-comment" maxlength="2000" rows="3"
+          placeholder="可选，最多 2000 字"></textarea>
+      </div>
+
+      <p id="action-hint" class="hint" role="status" aria-live="polite"></p>
+      <div class="actions">
+        <button type="button" data-action="approve" disabled>approve</button>
+        <button type="button" data-action="reject" disabled>reject</button>
+        <button type="button" data-action="takeover" disabled>takeover</button>
+      </div>
+      <p class="hint">仅 awaiting_review 可审核；草稿为空时 approve 不可用。</p>
+    </section>
+
+    <footer>本页面不会发送邮件；审核通过不等于已发送。</footer>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const taskForm = document.getElementById("task-form");
+      const taskIdInput = document.getElementById("task-id");
+      const loadButton = document.getElementById("load-button");
+      const flash = document.getElementById("flash");
+      const taskPanel = document.getElementById("task-panel");
+      const actionButtons = Array.from(
+        document.querySelectorAll("[data-action]")
+      );
+      let currentTask = null;
+      let busy = false;
+
+      function setFlash(message, kind) {
+        flash.textContent = message || "";
+        flash.className = "flash" + (kind ? " " + kind : "");
+        flash.hidden = !message;
+      }
+
+      function setText(id, value, fallback) {
+        const element = document.getElementById(id);
+        const missing = value === null || value === undefined || value === "";
+        element.textContent = missing ? (fallback || "—") : String(value);
+      }
+
+      function setBusy(value) {
+        busy = value;
+        loadButton.disabled = value;
+        updateActionState();
+      }
+
+      function getTaskId() {
+        const raw = taskIdInput.value.trim();
+        if (!/^[1-9][0-9]*$/.test(raw)) {
+          throw new Error("请输入正整数 task_id。");
+        }
+        return raw;
+      }
+
+      function extractDetail(payload, fallback) {
+        const detail = payload && payload.detail;
+        if (typeof detail === "string" && detail.trim()) {
+          return detail;
+        }
+        if (Array.isArray(detail)) {
+          const messages = detail.map((item) => {
+            if (item && typeof item.msg === "string") return item.msg;
+            return "请求字段校验失败";
+          });
+          if (messages.length) return messages.join("；");
+        }
+        return fallback;
+      }
+
+      async function readJson(response) {
+        try {
+          return await response.json();
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function updateActionState() {
+        const canReview = Boolean(
+          currentTask && currentTask.status === "awaiting_review"
+        );
+        const hasDraft = Boolean(
+          currentTask &&
+          typeof currentTask.draft_body === "string" &&
+          currentTask.draft_body.trim()
+        );
+        actionButtons.forEach((button) => {
+          const action = button.dataset.action;
+          let disabled = busy || !canReview;
+          if (action === "approve") {
+            disabled = disabled || !hasDraft;
+          }
+          button.disabled = disabled;
+        });
+        const hint = document.getElementById("action-hint");
+        if (!currentTask) {
+          hint.textContent = "";
+        } else if (!canReview) {
+          hint.textContent = "只有 awaiting_review 状态可审核。";
+        } else if (!hasDraft) {
+          hint.textContent =
+            "当前没有可用草稿，approve 已禁用；仍可 reject 或 takeover。";
+        } else {
+          hint.textContent = "";
+        }
+      }
+
+      function renderTask(task) {
+        if (!task || typeof task !== "object") {
+          throw new Error("查询响应格式无效。");
+        }
+        currentTask = task;
+        taskPanel.hidden = false;
+        setText("task-id-value", task.id);
+        const statusElement = document.getElementById("task-status");
+        statusElement.textContent = task.status || "—";
+        statusElement.dataset.status =
+          typeof task.status === "string" ? task.status : "";
+        setText("task-category", task.category);
+        setText("task-risk-level", task.risk_level);
+        setText("task-summary", task.summary);
+        setText("task-draft", task.draft_body, "（无可用草稿）");
+        setText("task-failure", task.failure_reason, "（无）");
+        if (typeof task.requires_human === "boolean") {
+          setText(
+            "task-requires-human",
+            task.requires_human ? "是" : "否"
+          );
+        } else {
+          setText("task-requires-human", null);
+        }
+        updateActionState();
+      }
+
+      function clearTask() {
+        currentTask = null;
+        taskPanel.hidden = true;
+        updateActionState();
+      }
+
+      async function loadTask(options) {
+        const silent = Boolean(options && options.silent);
+        if (busy) return false;
+        let taskId;
+        try {
+          taskId = getTaskId();
+        } catch (error) {
+          setFlash(error.message, "error");
+          taskIdInput.focus();
+          return false;
+        }
+
+        clearTask();
+        setBusy(true);
+        if (!silent) setFlash("正在查询任务…", "info");
+        try {
+          const response = await fetch(
+            `/api/v1/emails/${encodeURIComponent(taskId)}`,
+            { headers: { Accept: "application/json" } }
+          );
+          const payload = await readJson(response);
+          if (!response.ok) {
+            setFlash(
+              extractDetail(payload, `查询失败（HTTP ${response.status}）`),
+              "error"
+            );
+            return false;
+          }
+          renderTask(payload);
+          if (!silent) setFlash("任务已加载。", "success");
+          return true;
+        } catch (error) {
+          setFlash(`查询失败：${error.message}`, "error");
+          return false;
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      function reviewSuccessMessage(status) {
+        if (status === "approved") {
+          return "审核通过（approved）。注意：这不代表邮件已发送。";
+        }
+        if (status === "rejected") {
+          return "已拒绝（rejected）。";
+        }
+        if (status === "human_takeover") {
+          return "已转人工接管（human_takeover）。";
+        }
+        return "审核已提交。";
+      }
+      async function submitReview(action) {
+        if (busy || !currentTask) return;
+        if (!["approve", "reject", "takeover"].includes(action)) return;
+
+        const reviewerInput = document.getElementById("reviewed-by");
+        const commentInput = document.getElementById("review-comment");
+        const reviewedBy = reviewerInput.value.trim();
+        const comment = commentInput.value.trim();
+
+        if (!reviewedBy) {
+          setFlash("请填写 reviewed_by（自报演示身份）。", "error");
+          reviewerInput.focus();
+          return;
+        }
+        if (reviewedBy.length > 255) {
+          setFlash("reviewed_by 不能超过 255 个字符。", "error");
+          reviewerInput.focus();
+          return;
+        }
+        if (comment.length > 2000) {
+          setFlash("审核备注不能超过 2000 个字符。", "error");
+          commentInput.focus();
+          return;
+        }
+
+        setBusy(true);
+        setFlash("正在提交审核…", "info");
+        try {
+          const response = await fetch(
+            `/api/v1/emails/${encodeURIComponent(String(currentTask.id))}/review`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              body: JSON.stringify({
+                action,
+                reviewed_by: reviewedBy,
+                review_comment: comment || null,
+              }),
+            }
+          );
+          const payload = await readJson(response);
+
+          if (response.status === 409) {
+            setFlash(
+              "审核冲突：任务状态已变化，正在刷新最新状态…",
+              "error"
+            );
+            setBusy(false);
+            const refreshed = await loadTask({ silent: true });
+            if (refreshed) {
+              setFlash(
+                "审核冲突：已刷新任务，请检查最新状态后再操作。",
+                "error"
+              );
+            }
+            return;
+          }
+
+          if (!response.ok) {
+            setFlash(
+              extractDetail(payload, `审核失败（HTTP ${response.status}）`),
+              "error"
+            );
+            return;
+          }
+
+          renderTask(payload);
+          setFlash(reviewSuccessMessage(payload.status), "success");
+        } catch (error) {
+          setFlash(`审核失败：${error.message}`, "error");
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      taskForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        loadTask();
+      });
+
+      actionButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          submitReview(button.dataset.action);
+        });
+      });
+
+      const initialTaskId = new URLSearchParams(
+        window.location.search
+      ).get("task_id");
+      if (initialTaskId) {
+        taskIdInput.value = initialTaskId;
+        loadTask();
+      }
+
+      updateActionState();
+    })();
+  </script>
+</body>
+</html>

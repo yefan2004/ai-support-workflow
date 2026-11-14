@@ -1,11 +1,14 @@
 """FastAPI 应用入口。
 
 演示项目：AI 辅助客服邮件分流与人工审核。
-本阶段提供健康检查与邮件任务登记（含数据库去重）接口；
-AI 分流、审核与发送等模块仍为后续阶段占位。
+提供健康检查、邮件登记、AI 分流与人工审核接口；
+AI Provider 默认使用离线 Mock，可通过配置启用 DeepSeek。
 """
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 from app.api.routes import emails, health
 from app.config import get_settings
@@ -24,6 +27,14 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(emails.router)
+
+_UI_PAGE = Path(__file__).resolve().parent / "static" / "review.html"
+
+
+@app.get("/ui", include_in_schema=False)
+def review_ui() -> FileResponse:
+    """返回同源的人工审核单页。"""
+    return FileResponse(_UI_PAGE, media_type="text/html")
 
 
 @app.get("/", tags=["meta"])
