@@ -105,8 +105,13 @@ def test_final_update_conflict_does_not_report_success(
 
 
 def test_claim_commit_failure_returns_503_with_uncertainty(
-    api_client: TestClient, db_engine: Engine, monkeypatch: pytest.MonkeyPatch
+    api_client: TestClient,
+    db_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+    override_ai_provider,
 ) -> None:
+    provider = RecordingProvider(result=make_result())
+    override_ai_provider(provider)
     task_id = create_task(api_client)
     testing_session_factory = sessionmaker(
         bind=db_engine, autoflush=False, expire_on_commit=False
@@ -134,12 +139,18 @@ def test_claim_commit_failure_returns_503_with_uncertainty(
 
     assert response.status_code == 503
     assert "可能不确定" in response.json()["detail"]
+    assert provider.calls == 0
     # 不在此断言任务状态一定未改变：提交确认阶段中断时状态可能未知。
 
 
 def test_final_commit_failure_returns_503_without_success(
-    api_client: TestClient, db_engine: Engine, monkeypatch: pytest.MonkeyPatch
+    api_client: TestClient,
+    db_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+    override_ai_provider,
 ) -> None:
+    provider = RecordingProvider(result=make_result())
+    override_ai_provider(provider)
     task_id = create_task(api_client)
     testing_session_factory = sessionmaker(
         bind=db_engine, autoflush=False, expire_on_commit=False
@@ -172,3 +183,4 @@ def test_final_commit_failure_returns_503_without_success(
 
     assert response.status_code == 503
     assert "可能不确定" in response.json()["detail"]
+    assert provider.calls == 1

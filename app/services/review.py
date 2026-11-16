@@ -34,10 +34,31 @@ def apply_review(
     action: ReviewAction,
     reviewed_by: str,
     review_comment: str | None,
+    draft_body: str | None = None,
 ) -> EmailTask:
-    """执行审核动作；approve 额外要求非空草稿。"""
+    """执行审核动作；approve 额外要求非空草稿。
+
+    ``draft_body`` 可选：提供时保存审核人编辑后的草稿；不提供时保持原值。
+    """
     target_status = _TARGET_STATUS[action]
     validate_transition(EmailTaskStatus.AWAITING_REVIEW, target_status)
+
+    if (
+        action is ReviewAction.APPROVE
+        and draft_body is not None
+        and not draft_body.strip()
+    ):
+        current = reload_task(db, task_id)
+        if current is None:
+            raise TaskNotFoundError(task_id)
+        if current.status != EmailTaskStatus.AWAITING_REVIEW.value:
+            raise TaskStateConflictError(
+                current.status,
+                f"任务当前状态为 {current.status}，不能执行审核",
+            )
+        raise TaskStateConflictError(
+            current.status, "任务没有可审核的草稿，不能批准"
+        )
 
     conditions = [
         EmailTask.id == task_id,
@@ -55,18 +76,22 @@ def apply_review(
         )
 
     comment = review_comment.strip() if review_comment else None
+    values: dict[str, object] = {
+        "status": target_status.value,
+        "review_action": action.value,
+        "reviewed_by": reviewed_by,
+        "reviewed_at": func.now(),
+        "review_comment": comment,
+        "updated_at": func.now(),
+    }
+    if draft_body is not None:
+        values["draft_body"] = draft_body
+
     try:
         statement = (
             update(EmailTask)
             .where(*conditions)
-            .values(
-                status=target_status.value,
-                review_action=action.value,
-                reviewed_by=reviewed_by,
-                reviewed_at=func.now(),
-                review_comment=comment,
-                updated_at=func.now(),
-            )
+            .values(**values)
             .returning(EmailTask)
         )
         task = db.execute(statement).scalar_one_or_none()

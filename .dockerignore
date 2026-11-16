@@ -1,0 +1,48 @@
+# Build context safety for the isolated demo images.
+# Keep secrets, VCS data, local environments and non-runtime files out of
+# the Docker build context. There is intentionally NO negation rule for
+# .env or .env.* here: the images do not need either file.
+
+# Secrets / local configuration
+.env
+.env.*
+**/.env
+**/.env.*
+
+# VCS / IDE / OS
+.git
+.gitignore
+.github
+.idea
+.vscode
+.DS_Store
+
+# Python virtual environments and caches
+.venv
+venv
+env
+__pycache__
+*.py[cod]
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+.coverage.*
+htmlcov
+
+# Local runtime data and logs
+pgdata
+n8n_data
+*.log
+
+# Files not needed by the runtime images
+tests
+docs
+n8n
+examples
+架构图
+README.md
+pyproject.toml
+docker-compose.yml
+docker-compose.demo.yml

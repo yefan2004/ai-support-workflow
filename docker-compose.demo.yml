@@ -1,0 +1,83 @@
+# Isolated local Docker demo: PostgreSQL + FastAPI + Streamlit.
+#
+# Project name is intentionally different from the existing
+# ai-support-workflow project. This file does not include n8n and does not
+# reference the host .env, the existing database volume, or existing services.
+name: ai-support-demo
+
+services:
+  demo-db:
+    image: postgres:16-alpine
+    container_name: ai-support-demo-db
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: ai_support_demo
+    volumes:
+      - demo_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d ai_support_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Intentionally no host port: the demo database is reachable only from
+    # the demo Compose network.
+
+  demo-api:
+    image: ai-support-demo-api:local
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: ai-support-demo-api
+    environment:
+      APP_NAME: AI Support Workflow Demo
+      APP_ENV: docker-demo
+      APP_VERSION: 0.1.0
+      # Demo database only. Do not point this at ai_support or
+      # ai_support_test, and do not pass the host .env into this container.
+      DATABASE_URL: postgresql+psycopg://demo:demo@demo-db:5432/ai_support_demo
+      # Offline, deterministic provider. No DEEPSEEK_API_KEY is passed.
+      AI_PROVIDER: mock
+    ports:
+      - "127.0.0.1:8020:8000"
+    depends_on:
+      demo-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  demo-ui:
+    image: ai-support-demo-ui:local
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: ai-support-demo-ui
+    environment:
+      # The UI calls the API by Compose service name, not localhost.
+      API_BASE_URL: http://demo-api:8000
+    ports:
+      - "127.0.0.1:8503:8501"
+    depends_on:
+      demo-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  demo_pgdata:

@@ -70,6 +70,10 @@ class EmailTaskReviewRequest(BaseModel):
     review_comment: str | None = Field(
         default=None, max_length=2000, description="审核备注（可选）"
     )
+    draft_body: str | None = Field(
+        default=None,
+        description="审核时可选保存的草稿修改；不传则保持原草稿",
+    )
 
 
 class EmailTaskDetail(BaseModel):
@@ -97,3 +101,14 @@ class EmailTaskDetail(BaseModel):
     review_comment: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class EmailTaskListItem(BaseModel):
+    """待审核收件箱列表项。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    status: str
+    summary: str | None
+    risk_level: str | None

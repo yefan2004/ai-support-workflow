@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,7 @@ from app.providers.ai.base import AIProvider
 from app.schemas.emails import (
     EmailTaskCreate,
     EmailTaskDetail,
+    EmailTaskListItem,
     EmailTaskResponse,
     EmailTaskReviewRequest,
 )
@@ -72,6 +74,33 @@ def create_email_task(
     if not result.created:
         response.status_code = status.HTTP_200_OK
     return _to_response(result.task, duplicate=not result.created)
+
+
+@router.get(
+    "/emails",
+    response_model=list[EmailTaskListItem],
+    summary="列出邮件任务（待审核收件箱）",
+    responses={503: {"description": "数据库操作失败"}},
+)
+def list_email_tasks(
+    db: Session = Depends(get_db),
+) -> list[EmailTaskListItem]:
+    """按更新时间倒序返回任务列表；状态过滤由前端完成。"""
+    try:
+        tasks = db.scalars(
+            select(EmailTask).order_by(
+                EmailTask.updated_at.desc(),
+                EmailTask.id.desc(),
+            )
+        ).all()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="数据库操作失败，请稍后重试",
+        ) from exc
+
+    return [EmailTaskListItem.model_validate(task) for task in tasks]
 
 
 @router.get(
@@ -181,6 +210,7 @@ def review_email_task(
             payload.action,
             payload.reviewed_by,
             payload.review_comment,
+            payload.draft_body,
         )
     except TaskNotFoundError as exc:
         raise HTTPException(

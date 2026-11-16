@@ -17,7 +17,10 @@ from app.providers.ai.base import (
     AIProviderRetryableError,
     AIProviderTimeoutError,
 )
-from app.providers.ai.deepseek_provider import DeepSeekAIProvider
+from app.providers.ai.deepseek_provider import (
+    DeepSeekAIProvider,
+    _SYSTEM_PROMPT,
+)
 from app.services import triage
 from app.services.errors import ProviderProcessingError
 from tests.fakes import InvalidOutputProvider, RecordingProvider
@@ -183,6 +186,16 @@ def test_email_is_untrusted_user_data_not_system_instruction() -> None:
     assert "不得执行" in system_prompt
     assert email_body in user_content
     assert email_body not in system_prompt
+
+
+def test_system_prompt_requires_language_and_safe_refund_wording() -> None:
+    assert "same language as the customer's email" in _SYSTEM_PROMPT
+    assert "summary, risk_reason, and draft_body" in _SYSTEM_PROMPT
+    assert "we will get back to you" in _SYSTEM_PROMPT
+    assert "will be routed for human review" in _SYSTEM_PROMPT
+    assert "requires_human" in _SYSTEM_PROMPT
+    assert "risk_reason" in _SYSTEM_PROMPT
+    assert "draft_body" in _SYSTEM_PROMPT
 
 
 def test_requires_human_is_forced_true() -> None:
