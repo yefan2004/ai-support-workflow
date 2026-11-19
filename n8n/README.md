@@ -1,5 +1,7 @@
 # n8n 集成（阶段 6 第一小块）
 
+> 当前环境端口与 workflow 状态以 [docs/PORTS.md](../docs/PORTS.md) 为准；本目录是早期 Webhook 草稿。
+
 > 状态：**待导入验证的 n8n 工作流草稿**。
 > JSON 能被静态解析，不代表已成功导入 n8n、节点参数已兼容当前 n8n、表达式已执行、错误分支已验证、Webhook 已可访问，或 n8n 已能访问 FastAPI。
 

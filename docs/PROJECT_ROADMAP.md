@@ -1,5 +1,7 @@
 # 项目路线图：AI-assisted Event Triage & Human Review
 
+> 端口与当前 n8n workflow 状态以 [docs/PORTS.md](PORTS.md) 为准（2026-11-19）。
+
 > 文档日期：2026-11-16
 >
 > 事实口径：本文基于当前工作区的 README、`app/` 代码、Alembic 迁移、`docker-compose.yml`、`docker-compose.demo.yml`、Docker 配置、`.github/workflows/ci.yml` 和 `tests/` 目录整理。Docker Demo 的实现和现有验证结果在后续阶段记录中补充；本文不把 Docker 验证扩展为完整 pytest、跨机器冷启动或生产稳定性证明。文中的“已验证”只表示 README、阶段记录或现有 Docker 报告曾经记录过验证，或仓库中存在对应测试，不表示本次重新运行了完整测试套件。
