@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 
-from app.api.routes import emails, health
+from app.api.routes import ai, emails, health
 from app.config import get_settings
 
 settings = get_settings()
@@ -27,6 +27,8 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(emails.router)
+# AI 路由只在注册处加一次 /api/v1；router 自身不带前缀。
+app.include_router(ai.router, prefix="/api/v1")
 
 _UI_PAGE = Path(__file__).resolve().parent / "static" / "review.html"
 
