@@ -1,4 +1,5 @@
-# 本地演示用 Docker Compose 配置：PostgreSQL + n8n。
+# 本地演示用 Docker Compose 配置：PostgreSQL + legacy n8n。
+# 当前主 n8n 是手动容器 ai-support-n8n-manual-stage6（宿主机 5679）。
 # 全部为演示默认值，不包含任何真实密钥；生产环境请自行修改并启用鉴权。
 
 services:
@@ -19,8 +20,11 @@ services:
       timeout: 5s
       retries: 10
 
-  # n8n 用于本地演示工作流编排；生产部署必须自行配置鉴权与持久化策略。
+  # 5678 已退役：当前主 n8n 是手动容器 ai-support-n8n-manual-stage6（宿主机 5679）。
+  # 如需临时启动旧 compose n8n，显式使用：
+  # docker compose --profile legacy up -d n8n
   n8n:
+    profiles: ["legacy"]
     image: n8nio/n8n:latest
     container_name: ai-support-n8n
     environment:
